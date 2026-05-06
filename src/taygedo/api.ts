@@ -68,7 +68,7 @@ export class TaygedoApi {
       body,
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'sendCaptcha') as {
       code?: number
       message?: string
       msg?: string
@@ -111,7 +111,7 @@ export class TaygedoApi {
       body,
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'loginWithCaptcha') as {
       code?: number
       message?: string
       msg?: string
@@ -150,7 +150,7 @@ export class TaygedoApi {
       }),
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'userCenterLogin') as {
       code?: number
       msg?: string
       data?: {
@@ -183,7 +183,7 @@ export class TaygedoApi {
       },
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'refreshToken') as {
       code?: number
       msg?: string
       data?: {
@@ -212,7 +212,7 @@ export class TaygedoApi {
       },
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'getBindRole') as {
       code?: number
       msg?: string
       data?: BindRoleResponse
@@ -238,7 +238,7 @@ export class TaygedoApi {
       },
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'getGameRoles') as {
       code?: number
       msg?: string
       data?: {
@@ -274,7 +274,7 @@ export class TaygedoApi {
       body: 'communityId=1',
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'appSignin') as {
       code?: number
       msg?: string
       data?: { exp?: number, goldCoin?: number }
@@ -303,7 +303,7 @@ export class TaygedoApi {
       },
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'getSigninState') as {
       code?: number
       msg?: string
       data?: { days?: number }
@@ -326,7 +326,7 @@ export class TaygedoApi {
       },
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'getSigninRewards') as {
       code?: number
       msg?: string
       data?: Array<{ name: string, num: number }>
@@ -349,7 +349,7 @@ export class TaygedoApi {
       body: `roleId=${encodeURIComponent(roleId)}&gameId=${encodeURIComponent(gameId)}`,
     })
 
-    const data = await response.json() as {
+    const data = await readJson(response, 'gameSignin') as {
       code?: number
       msg?: string
     }
@@ -382,4 +382,23 @@ function aesBase64Encode(value: string): string {
 
 function formEncode(data: Record<string, string>): string {
   return new URLSearchParams(data).toString()
+}
+
+async function readJson(response: Response, endpointName: string): Promise<unknown> {
+  const text = await response.text()
+  if (!text.trim()) {
+    throw new Error(`${endpointName} returned invalid JSON (HTTP ${response.status}, empty response)`)
+  }
+
+  try {
+    return JSON.parse(text) as unknown
+  }
+  catch {
+    throw new Error(`${endpointName} returned invalid JSON (HTTP ${response.status}, response: ${summarizeResponse(text)})`)
+  }
+}
+
+function summarizeResponse(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized
 }

@@ -37,6 +37,15 @@ describe('TaygedoApi', () => {
     )
   })
 
+  it('reports which endpoint returned invalid json', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 200 }))
+    const api = new TaygedoApi({ fetch: fetchMock })
+
+    await expect(api.refreshToken('old-refresh', 'device-1')).rejects.toThrow(
+      'refreshToken returned invalid JSON (HTTP 200, empty response)',
+    )
+  })
+
   it('calls app and game signin endpoints with the access token', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(
