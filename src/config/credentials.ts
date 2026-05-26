@@ -1,0 +1,72 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+
+export interface EncryptedPassword {
+  v: 1
+  alg: 'AES-256-GCM'
+  iv: string
+  tag: string
+  data: string
+}
+
+export function generateCredentialKey(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+export async function loadOrCreateCredentialKey(path: string): Promise<string> {
+  try {
+    const stored = (await readFile(path, 'utf8')).trim()
+    if (stored) {
+      return stored
+    }
+  }
+  catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      throw error
+    }
+  }
+  const key = generateCredentialKey()
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, `${key}\n`, { encoding: 'utf8', mode: 0o600 })
+  return key
+}
+
+export function encryptPassword(password: string, credentialKey: string): EncryptedPassword {
+  const key = deriveKey(credentialKey)
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const encrypted = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()])
+  return {
+    v: 1,
+    alg: 'AES-256-GCM',
+    iv: iv.toString('base64url'),
+    tag: cipher.getAuthTag().toString('base64url'),
+    data: encrypted.toString('base64url'),
+  }
+}
+
+export function decryptPassword(encryptedPassword: EncryptedPassword, credentialKey: string): string {
+  try {
+    if (encryptedPassword.v !== 1 || encryptedPassword.alg !== 'AES-256-GCM') {
+      throw new Error('Unsupported encrypted password format')
+    }
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      deriveKey(credentialKey),
+      Buffer.from(encryptedPassword.iv, 'base64url'),
+    )
+    decipher.setAuthTag(Buffer.from(encryptedPassword.tag, 'base64url'))
+    return Buffer.concat([
+      decipher.update(Buffer.from(encryptedPassword.data, 'base64url')),
+      decipher.final(),
+    ]).toString('utf8')
+  }
+  catch {
+    throw new Error('Failed to decrypt stored password')
+  }
+}
+
+function deriveKey(credentialKey: string): Buffer {
+  return createHash('sha256').update(credentialKey, 'utf8').digest()
+}

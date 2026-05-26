@@ -29,7 +29,9 @@ describe('loadRuntimeConfig', () => {
       TAYGEDO_PASSWORDS: '{"main":"main-password","13800138000":"phone-password"}',
       TAYGEDO_LOGIN_PASSWORD: 'default-password',
       TAYGEDO_LOGIN_ACCOUNT_ID: 'alt',
+      TAYGEDO_CREDENTIAL_KEY: 'credential-key',
     })).toEqual(expect.objectContaining({
+      credentialKey: 'credential-key',
       accountPasswords: {
         main: 'main-password',
         '13800138000': 'phone-password',

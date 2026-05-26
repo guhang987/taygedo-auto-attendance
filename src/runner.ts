@@ -3,11 +3,13 @@ import { TaygedoApi } from './taygedo/api.js'
 import { sendNotification } from './notify.js'
 import { withRetries } from './utils/retry.js'
 import { TAYGEDO_GAME_IDS } from './taygedo/games.js'
+import { decryptPassword } from './config/credentials.js'
 
 export interface RunnerDependencies {
   accountsSecret: string
   api?: AttendanceApi
   accountPasswords?: Record<string, string>
+  credentialKey?: string
   notificationUrls?: string[]
   maxRetries?: number
   secretWriter?: (payload: string) => Promise<void>
@@ -53,7 +55,7 @@ export async function runAttendance(deps: RunnerDependencies): Promise<RunAttend
   for (const account of accounts) {
     try {
       const accountRun = await withRetries(async () => {
-        return await runAccount(api, account, deps.accountPasswords ?? {})
+        return await runAccount(api, account, deps.accountPasswords ?? {}, deps.credentialKey)
       }, deps.maxRetries ?? 3)
 
       if (accountRun.shouldUpdateSecret) {
@@ -106,6 +108,7 @@ async function runAccount(
   api: AttendanceApi,
   account: TaygedoAccount,
   accountPasswords: Record<string, string>,
+  credentialKey?: string,
 ): Promise<AccountRunResult> {
   if (account.accessToken) {
     try {
@@ -118,7 +121,7 @@ async function runAccount(
     }
   }
 
-  const session = await refreshOrRebuildSession(api, account, accountPasswords)
+  const session = await refreshOrRebuildSession(api, account, accountPasswords, credentialKey)
   return await signWithSession(api, session.account, session.accessToken, true)
 }
 
@@ -126,8 +129,9 @@ async function refreshOrRebuildSession(
   api: Pick<TaygedoApi, 'refreshToken'> & Partial<Pick<TaygedoApi, 'loginWithPassword' | 'userCenterLogin'>>,
   account: TaygedoAccount,
   accountPasswords: Record<string, string>,
+  credentialKey?: string,
 ): Promise<{ account: TaygedoAccount, accessToken: string }> {
-  const password = accountPasswords[account.id] ?? accountPasswords[account.phone ?? ''] ?? accountPasswords.default
+  const password = resolveAccountPassword(account, accountPasswords, credentialKey)
   if (account.phone && password && api.loginWithPassword && api.userCenterLogin) {
     try {
       const login = await api.loginWithPassword(account.phone, password, account.deviceId)
@@ -177,6 +181,21 @@ async function refreshOrRebuildSession(
     account: updatedAccount,
     accessToken: rebuilt.accessToken,
   }
+}
+
+function resolveAccountPassword(
+  account: TaygedoAccount,
+  accountPasswords: Record<string, string>,
+  credentialKey?: string,
+): string | undefined {
+  const envPassword = accountPasswords[account.id] ?? accountPasswords[account.phone ?? ''] ?? accountPasswords.default
+  if (envPassword) {
+    return envPassword
+  }
+  if (account.encryptedPassword && credentialKey) {
+    return decryptPassword(account.encryptedPassword, credentialKey)
+  }
+  return undefined
 }
 
 async function signWithSession(

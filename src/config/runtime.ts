@@ -4,6 +4,8 @@ export type StateStoreKind = 'memory' | 'file' | 'cloudflare-kv' | 'upstash'
 export interface RuntimeConfig {
   accountsSecret?: string
   accountPasswords: Record<string, string>
+  credentialKey?: string
+  credentialKeyPath?: string
   notificationUrls: string[]
   maxRetries: number
   updatedAccountsPath: string
@@ -20,6 +22,8 @@ export function loadRuntimeConfig(env: Record<string, string | undefined>): Runt
   return {
     accountsSecret: optionalEnv(env, 'TAYGEDO_ACCOUNTS'),
     accountPasswords: parseAccountPasswords(env),
+    credentialKey: optionalEnv(env, 'TAYGEDO_CREDENTIAL_KEY'),
+    credentialKeyPath: optionalEnv(env, 'TAYGEDO_CREDENTIAL_KEY_PATH'),
     notificationUrls: [
       ...splitComma(env.TAYGEDO_NOTIFICATION_URLS),
       ...serverChanUrls(env.TAYGEDO_SERVERCHAN_SENDKEY),

@@ -75,9 +75,17 @@ jobs:
           TAYGEDO_LOGIN_DEVICE_ID: ${{ secrets.TAYGEDO_LOGIN_DEVICE_ID }}
           TAYGEDO_LOGIN_ACCOUNT_ID: ${{ inputs.account_id }}
           TAYGEDO_LOGIN_ACCOUNT_NAME: ${{ inputs.account_name }}
+          TAYGEDO_CREDENTIAL_KEY: ${{ secrets.TAYGEDO_CREDENTIAL_KEY }}
+          TAYGEDO_CREDENTIAL_KEY_PATH: credential-key.txt
           TAYGEDO_ACCOUNTS: ${{ secrets.TAYGEDO_ACCOUNTS }}
           TAYGEDO_UPDATED_ACCOUNTS_PATH: updated-accounts.json
         run: pnpm tsx src/login-action.ts
+
+      - name: 保存加密密钥 Secret
+        if: inputs.mode == 'password' && hashFiles('credential-key.txt') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_SECRET_UPDATE_TOKEN }}
+        run: gh secret set TAYGEDO_CREDENTIAL_KEY < credential-key.txt
 
       - name: 更新账号 Secret
         if: (inputs.mode == 'login' || inputs.mode == 'password') && hashFiles('updated-accounts.json') != ''

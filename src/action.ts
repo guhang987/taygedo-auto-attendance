@@ -26,6 +26,7 @@ export async function runAction(options: ActionOptions = {}): Promise<void> {
     stateStore: new MemoryStateStore(config.statePrefix),
     api: options.api ?? new TaygedoApi(),
     accountPasswords: config.accountPasswords,
+    credentialKey: config.credentialKey,
     notificationUrls: config.notificationUrls,
     maxRetries: config.maxRetries,
   })

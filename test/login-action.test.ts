@@ -160,6 +160,94 @@ describe('runLoginAction', () => {
     }
   })
 
+  it('encrypts the password when a credential key is configured', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'taygedo-login-encrypted-password-'))
+    const accountsPath = join(dir, 'updated-accounts.json')
+    const api = {
+      sendCaptcha: vi.fn(),
+      checkCaptcha: vi.fn(),
+      loginWithCaptcha: vi.fn(),
+      loginWithPassword: vi.fn().mockResolvedValue({ token: 'laohu-token', userId: 'laohu-user' }),
+      userCenterLogin: vi.fn().mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        uid: 'tjd-uid',
+      }),
+      getBindRole: vi.fn().mockResolvedValue({}),
+    }
+
+    try {
+      await runLoginAction({
+        env: {
+          TAYGEDO_LOGIN_MODE: 'password',
+          TAYGEDO_LOGIN_PHONE: '13800138000',
+          TAYGEDO_LOGIN_PASSWORD: 'secret-password',
+          TAYGEDO_LOGIN_ACCOUNT_ID: 'main',
+          TAYGEDO_LOGIN_ACCOUNT_NAME: '主账号',
+          TAYGEDO_CREDENTIAL_KEY: 'test-credential-key',
+          TAYGEDO_LOGIN_UPDATED_ACCOUNTS_PATH: accountsPath,
+        },
+        api,
+        generateDeviceId: () => 'device-generated',
+      })
+
+      const payload = await readFile(accountsPath, 'utf8')
+      const account = JSON.parse(payload)[0]
+      expect(payload).not.toContain('secret-password')
+      expect(account.encryptedPassword).toEqual(expect.objectContaining({
+        v: 1,
+        alg: 'AES-256-GCM',
+        iv: expect.any(String),
+        tag: expect.any(String),
+        data: expect.any(String),
+      }))
+    }
+    finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('generates a credential key file when password login has no configured key', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'taygedo-login-generated-key-'))
+    const accountsPath = join(dir, 'updated-accounts.json')
+    const credentialKeyPath = join(dir, 'credential-key.txt')
+    const api = {
+      sendCaptcha: vi.fn(),
+      checkCaptcha: vi.fn(),
+      loginWithCaptcha: vi.fn(),
+      loginWithPassword: vi.fn().mockResolvedValue({ token: 'laohu-token', userId: 'laohu-user' }),
+      userCenterLogin: vi.fn().mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        uid: 'tjd-uid',
+      }),
+      getBindRole: vi.fn().mockResolvedValue({}),
+    }
+
+    try {
+      await runLoginAction({
+        env: {
+          TAYGEDO_LOGIN_MODE: 'password',
+          TAYGEDO_LOGIN_PHONE: '13800138000',
+          TAYGEDO_LOGIN_PASSWORD: 'secret-password',
+          TAYGEDO_LOGIN_ACCOUNT_ID: 'main',
+          TAYGEDO_LOGIN_UPDATED_ACCOUNTS_PATH: accountsPath,
+          TAYGEDO_CREDENTIAL_KEY_PATH: credentialKeyPath,
+        },
+        api,
+        generateDeviceId: () => 'device-generated',
+      })
+
+      expect((await readFile(credentialKeyPath, 'utf8')).trim()).not.toBe('')
+      const payload = await readFile(accountsPath, 'utf8')
+      expect(payload).not.toContain('secret-password')
+      expect(JSON.parse(payload)[0].encryptedPassword).toBeDefined()
+    }
+    finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('requires a stored device id when logging in with a captcha', async () => {
     const api = {
       sendCaptcha: vi.fn(),

@@ -31,7 +31,7 @@ describe('cloudflare worker runtime', () => {
 
   it('logs in with a password through a protected endpoint and stores accounts without plaintext password', async () => {
     const kv = new Map<string, string>()
-    const env = createEnv(kv, { TAYGEDO_ADMIN_TOKEN: 'secret' })
+    const env = createEnv(kv, { TAYGEDO_ADMIN_TOKEN: 'secret', TAYGEDO_CREDENTIAL_KEY: 'test-credential-key' })
 
     const denied = await worker.fetch(new Request('https://example.com/login', {
       method: 'POST',
@@ -59,6 +59,46 @@ describe('cloudflare worker runtime', () => {
     expect(allowed.status).toBe(200)
     expect(kv.get('TAYGEDO_ACCOUNTS')).toBeDefined()
     expect(kv.get('TAYGEDO_ACCOUNTS')).not.toContain('secret-password')
+    expect(JSON.parse(kv.get('TAYGEDO_ACCOUNTS') ?? '[]')[0].encryptedPassword).toBeDefined()
+  })
+
+  it('rejects password login without a credential key on Cloudflare', async () => {
+    const env = createEnv(new Map(), { TAYGEDO_ADMIN_TOKEN: 'secret' })
+
+    const response = await worker.fetch(new Request('https://example.com/login', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secret' },
+      body: JSON.stringify({
+        mode: 'password',
+        phone: '13800138000',
+        password: 'secret-password',
+        accountId: 'main',
+      }),
+    }), env, {} as ExecutionContext)
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual(expect.objectContaining({
+      error: expect.stringContaining('TAYGEDO_CREDENTIAL_KEY'),
+    }))
+  })
+
+  it('treats Cloudflare login without mode as password login when checking credential key', async () => {
+    const env = createEnv(new Map(), { TAYGEDO_ADMIN_TOKEN: 'secret' })
+
+    const response = await worker.fetch(new Request('https://example.com/login', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secret' },
+      body: JSON.stringify({
+        phone: '13800138000',
+        password: 'secret-password',
+        accountId: 'main',
+      }),
+    }), env, {} as ExecutionContext)
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual(expect.objectContaining({
+      error: expect.stringContaining('TAYGEDO_CREDENTIAL_KEY'),
+    }))
   })
 })
 

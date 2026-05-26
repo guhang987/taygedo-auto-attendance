@@ -34,8 +34,16 @@ const worker = {
     }
 
     if (url.pathname === '/login') {
-      const result = await runCloudflareLogin(request, env)
-      return Response.json({ ok: true, ...result })
+      try {
+        const result = await runCloudflareLogin(request, env)
+        return Response.json({ ok: true, ...result })
+      }
+      catch (error) {
+        if (error instanceof HttpError) {
+          return Response.json({ error: error.message }, { status: error.status })
+        }
+        throw error
+      }
     }
 
     const result = await runCloudflareAttendance(env)
@@ -52,6 +60,7 @@ async function runCloudflareAttendance(env: CloudflareEnv) {
     stateStore: createStateStore({ config, kv: env.KV }),
     api: env.TAYGEDO_TEST_API ?? new TaygedoApi(),
     accountPasswords: config.accountPasswords,
+    credentialKey: config.credentialKey,
     notificationUrls: config.notificationUrls,
     maxRetries: config.maxRetries,
   })
@@ -61,10 +70,14 @@ async function runCloudflareAttendance(env: CloudflareEnv) {
 async function runCloudflareLogin(request: Request, env: CloudflareEnv) {
   const config = loadRuntimeConfig(envToStrings(env))
   const body = await readLoginBody(request)
+  const mode = body.mode ?? 'password'
+  if (mode === 'password' && body.password && !config.credentialKey) {
+    throw new HttpError(400, 'Missing TAYGEDO_CREDENTIAL_KEY. Please add it as a Cloudflare secret first.')
+  }
   const currentAccounts = await tryReadCloudflareAccounts(env, config.accountsKey, config.accountsSecret)
   const service = new LoginService({ api: env.TAYGEDO_TEST_LOGIN_API ?? new TaygedoApi() })
   await service.runLogin({
-    mode: body.mode ?? 'password',
+    mode,
     phone: body.phone,
     password: body.password,
     captcha: body.captcha,
@@ -73,9 +86,19 @@ async function runCloudflareLogin(request: Request, env: CloudflareEnv) {
     accountName: body.accountName ?? body.accountId ?? '主账号',
     accountsFile: undefined,
     accountsSecret: currentAccounts,
+    credentialKey: config.credentialKey,
     writeAccounts: payload => env.KV.put(config.accountsKey, payload),
   })
   return { accountId: body.accountId ?? 'main' }
+}
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+  }
 }
 
 interface LoginRequestBody {

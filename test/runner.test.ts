@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runAttendance } from '../src/runner.js'
+import { encryptPassword } from '../src/config/credentials.js'
 
 describe('runAttendance', () => {
   it('keeps failed account refresh tokens unchanged in the updated secret payload', async () => {
@@ -263,6 +264,45 @@ describe('runAttendance', () => {
       tokenUpdatedAt: expect.any(String),
     }))
     expect(secretWriter).toHaveBeenCalledWith(JSON.stringify(result.updatedAccounts, null, 2))
+  })
+
+  it('uses an encrypted account password before refresh when a credential key is configured', async () => {
+    const credentialKey = 'test-credential-key'
+    const api = {
+      loginWithPassword: vi.fn().mockResolvedValue({ token: 'new-laohu-token', userId: 'new-laohu-user' }),
+      refreshToken: vi.fn(),
+      userCenterLogin: vi.fn().mockResolvedValue({ accessToken: 'password-access', refreshToken: 'password-refresh', uid: '1' }),
+      getGameRoles: vi.fn()
+        .mockRejectedValueOnce(new Error('AUTH_EXPIRED: token expired'))
+        .mockResolvedValueOnce({ roles: [{ roleId: 'role-1256-a', roleName: '幻塔A' }] })
+        .mockResolvedValueOnce({ roles: [] })
+        .mockResolvedValueOnce({ roles: [] }),
+      appSignin: vi.fn().mockResolvedValue({ exp: 10, goldCoin: 20 }),
+      getSigninState: vi.fn().mockResolvedValue({ days: 1 }),
+      getSigninRewards: vi.fn().mockResolvedValue([{ name: '奖励一', num: 1 }]),
+      gameSignin: vi.fn().mockResolvedValue(undefined),
+    }
+
+    await runAttendance({
+      accountsSecret: JSON.stringify([
+        {
+          id: 'main',
+          name: '主账号',
+          uid: '1',
+          deviceId: 'device-1',
+          accessToken: 'stored-access',
+          refreshToken: 'old-main',
+          phone: '13800138000',
+          encryptedPassword: encryptPassword('secret-password', credentialKey),
+        },
+      ]),
+      api,
+      credentialKey,
+      maxRetries: 1,
+    })
+
+    expect(api.loginWithPassword).toHaveBeenCalledWith('13800138000', 'secret-password', 'device-1')
+    expect(api.refreshToken).not.toHaveBeenCalled()
   })
 
   it('falls back to refresh when password relogin fails', async () => {

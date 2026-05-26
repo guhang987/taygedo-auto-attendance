@@ -12,6 +12,9 @@ export interface LoginServiceRunOptions {
   accountName?: string
   accountsFile?: string
   accountsSecret?: string
+  credentialKey?: string
+  credentialKeyPath?: string
+  writeCredentialKey?: (credentialKey: string) => Promise<void>
   writeAccounts?: (payload: string) => Promise<void>
 }
 
@@ -34,10 +37,12 @@ export class LoginService {
         TAYGEDO_LOGIN_DEVICE_ID: options.deviceId,
         TAYGEDO_LOGIN_ACCOUNT_ID: options.accountId,
         TAYGEDO_LOGIN_ACCOUNT_NAME: options.accountName,
+        TAYGEDO_CREDENTIAL_KEY: options.credentialKey,
         TAYGEDO_LOGIN_UPDATED_ACCOUNTS_PATH: options.writeAccounts ? undefined : options.accountsFile,
         TAYGEDO_ACCOUNTS: accountsSecret,
       },
       writeAccounts: options.writeAccounts,
+      writeCredentialKey: options.writeCredentialKey,
     })
   }
 }

@@ -81,4 +81,32 @@ describe('runLocalCli', () => {
       password: 'env-password',
     }))
   })
+
+  it('passes a credential key file option to password login', async () => {
+    const service = {
+      runAttendance: vi.fn(),
+      runLogin: vi.fn().mockResolvedValue(undefined),
+      sendLoginCode: vi.fn(),
+    }
+
+    await runLocalCli([
+      'login',
+      '--mode',
+      'password',
+      '--phone',
+      '13800138000',
+      '--password',
+      'secret-password',
+      '--account-id',
+      'main',
+      '--accounts-file',
+      'accounts.json',
+      '--credential-key-file',
+      'data/credential-key',
+    ], { service })
+
+    expect(service.runLogin).toHaveBeenCalledWith(expect.objectContaining({
+      credentialKeyPath: 'data/credential-key',
+    }))
+  })
 })

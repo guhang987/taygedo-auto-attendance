@@ -2,6 +2,7 @@ import { loadRuntimeConfig } from '../config/runtime.js'
 import { AttendanceService } from '../services/attendance-service.js'
 import { LoginService, type LoginServiceRunOptions } from '../services/login-service.js'
 import { createAccountStore, createStateStore } from '../stores/factory.js'
+import { loadOrCreateCredentialKey } from '../config/credentials.js'
 
 interface LocalCliDependencies {
   service?: LocalCliService
@@ -29,16 +30,18 @@ export async function runLocalCli(argv = process.argv.slice(2), deps: LocalCliDe
 
   if (command === 'login') {
     const accountsFile = requireOption(options, 'accounts-file')
-    await service.runLogin({
-      mode: requireOption(options, 'mode'),
-      phone: requireOption(options, 'phone'),
-      password: options.password ?? process.env.TAYGEDO_LOGIN_PASSWORD ?? process.env.TAYGEDO_PASSWORD,
-      captcha: options.captcha,
-      deviceId: options['device-id'],
-      accountId: options['account-id'],
-      accountName: options['account-name'],
-      accountsFile,
-    })
+      await service.runLogin({
+        mode: requireOption(options, 'mode'),
+        phone: requireOption(options, 'phone'),
+        password: options.password ?? process.env.TAYGEDO_LOGIN_PASSWORD ?? process.env.TAYGEDO_PASSWORD,
+        captcha: options.captcha,
+        deviceId: options['device-id'],
+        accountId: options['account-id'],
+        accountName: options['account-name'],
+        accountsFile,
+        credentialKey: options['credential-key'],
+        credentialKeyPath: options['credential-key-file'],
+      })
     return
   }
 
@@ -53,16 +56,27 @@ function createDefaultService(): LocalCliService {
         TAYGEDO_ACCOUNT_STORE: process.env.TAYGEDO_ACCOUNT_STORE ?? 'file',
         TAYGEDO_STATE_STORE: process.env.TAYGEDO_STATE_STORE ?? 'file',
       })
+      const credentialKey = config.credentialKey ?? (config.credentialKeyPath
+        ? await loadOrCreateCredentialKey(config.credentialKeyPath)
+        : undefined)
       await new AttendanceService({
         accountStore: createAccountStore({ config, accountsFile: options.accountsFile }),
         stateStore: createStateStore({ config, stateDir: options.stateDir }),
         accountPasswords: config.accountPasswords,
+        credentialKey,
         notificationUrls: config.notificationUrls,
         maxRetries: config.maxRetries,
       }).run()
     },
     async runLogin(options) {
-      await new LoginService().runLogin(options)
+      const credentialKeyPath = options.credentialKeyPath ?? process.env.TAYGEDO_CREDENTIAL_KEY_PATH
+      const generatedCredentialKey = options.credentialKey ?? process.env.TAYGEDO_CREDENTIAL_KEY ?? (credentialKeyPath
+        ? await loadOrCreateCredentialKey(credentialKeyPath)
+        : undefined)
+      await new LoginService().runLogin({
+        ...options,
+        credentialKey: generatedCredentialKey,
+      })
     },
     async sendLoginCode(options) {
       await new LoginService().sendLoginCode(options)

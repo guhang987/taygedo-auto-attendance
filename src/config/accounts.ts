@@ -1,3 +1,5 @@
+import type { EncryptedPassword } from './credentials.js'
+
 export interface TaygedoAccount {
   id: string
   name: string
@@ -9,6 +11,7 @@ export interface TaygedoAccount {
   laohuUserId?: string
   tokenUpdatedAt?: string
   phone?: string
+  encryptedPassword?: EncryptedPassword
   roleId?: string
   roleName?: string
 }
@@ -44,6 +47,7 @@ export function parseAccountsSecret(secret: string): TaygedoAccount[] {
     assignOptionalString(parsedAccount, account, 'laohuUserId')
     assignOptionalString(parsedAccount, account, 'tokenUpdatedAt')
     assignOptionalString(parsedAccount, account, 'phone')
+    assignOptionalEncryptedPassword(parsedAccount, account, index, id)
 
     const roleId = optionalString(account, 'roleId')
     const roleName = optionalString(account, 'roleName')
@@ -56,6 +60,48 @@ export function parseAccountsSecret(secret: string): TaygedoAccount[] {
 
     return parsedAccount
   })
+}
+
+function assignOptionalEncryptedPassword(
+  parsedAccount: TaygedoAccount,
+  account: Record<string, unknown>,
+  index: number,
+  id = String(account.id ?? index),
+): void {
+  const field = 'encryptedPassword'
+  const value = account[field]
+  if (value === undefined) {
+    return
+  }
+  if (!isRecord(value)) {
+    throw new Error(`Optional field ${field} for account ${id} must be an object when provided`)
+  }
+  const encryptedPassword = {
+    v: value.v,
+    alg: value.alg,
+    iv: value.iv,
+    tag: value.tag,
+    data: value.data,
+  }
+  if (
+    encryptedPassword.v !== 1
+    || encryptedPassword.alg !== 'AES-256-GCM'
+    || typeof encryptedPassword.iv !== 'string'
+    || typeof encryptedPassword.tag !== 'string'
+    || typeof encryptedPassword.data !== 'string'
+    || !encryptedPassword.iv
+    || !encryptedPassword.tag
+    || !encryptedPassword.data
+  ) {
+    throw new Error(`Optional field ${field} for account ${id} is invalid`)
+  }
+  parsedAccount.encryptedPassword = {
+    v: 1,
+    alg: 'AES-256-GCM',
+    iv: encryptedPassword.iv,
+    tag: encryptedPassword.tag,
+    data: encryptedPassword.data,
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,7 +135,7 @@ function optionalString(account: Record<string, unknown>, field: keyof TaygedoAc
 function assignOptionalString(
   parsedAccount: TaygedoAccount,
   account: Record<string, unknown>,
-  field: keyof TaygedoAccount,
+  field: 'accessToken' | 'laohuToken' | 'laohuUserId' | 'tokenUpdatedAt' | 'phone',
 ): void {
   const value = optionalString(account, field)
   if (value) {

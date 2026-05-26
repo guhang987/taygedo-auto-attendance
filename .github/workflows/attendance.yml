@@ -34,6 +34,7 @@ jobs:
           TAYGEDO_MAX_RETRIES: ${{ secrets.TAYGEDO_MAX_RETRIES }}
           TAYGEDO_PASSWORDS: ${{ secrets.TAYGEDO_PASSWORDS }}
           TAYGEDO_LOGIN_PASSWORD: ${{ secrets.TAYGEDO_LOGIN_PASSWORD }}
+          TAYGEDO_CREDENTIAL_KEY: ${{ secrets.TAYGEDO_CREDENTIAL_KEY }}
           TAYGEDO_UPDATED_ACCOUNTS_PATH: updated-accounts.json
         run: pnpm action
 

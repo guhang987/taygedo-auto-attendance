@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { TaygedoApi, type BindRoleResponse, type LoginWithCaptchaResponse, type UserCenterLoginResponse } from './taygedo/api.js'
 import { parseAccountsSecret, type TaygedoAccount } from './config/accounts.js'
+import { encryptPassword, generateCredentialKey } from './config/credentials.js'
 
 export interface LoginActionDependencies {
   env?: Record<string, string | undefined>
@@ -11,6 +12,7 @@ export interface LoginActionDependencies {
     & Partial<Pick<TaygedoApi, 'loginWithPassword'>>
   generateDeviceId?: () => string
   writeAccounts?: (payload: string) => Promise<void>
+  writeCredentialKey?: (credentialKey: string) => Promise<void>
 }
 
 export async function runLoginAction(deps: LoginActionDependencies = {}): Promise<void> {
@@ -71,6 +73,18 @@ export async function runLoginAction(deps: LoginActionDependencies = {}): Promis
   }
   if (mode === 'password') {
     nextAccount.phone = phone
+    let credentialKey = optionalEnv(env, 'TAYGEDO_CREDENTIAL_KEY')
+    if (!credentialKey && deps.writeCredentialKey) {
+      credentialKey = generateCredentialKey()
+      await deps.writeCredentialKey(credentialKey)
+    }
+    if (!credentialKey && env.TAYGEDO_CREDENTIAL_KEY_PATH) {
+      credentialKey = generateCredentialKey()
+      await writeTextFile(env.TAYGEDO_CREDENTIAL_KEY_PATH, `${credentialKey}\n`)
+    }
+    if (credentialKey && password) {
+      nextAccount.encryptedPassword = encryptPassword(password, credentialKey)
+    }
   }
   if (role.roleId) {
     nextAccount.roleId = role.roleId
